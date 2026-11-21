@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Say It</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Trebuchet MS", system-ui, sans-serif;
+      color: #352049;
+      background: #eee3f7;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      --page: #f3e4ee;
+      --panel: #fff3e1;
+      --bar: #63375e;
+      --paper: #ffd4df;
+      --ribbon: #d63d6b;
+      --trim: #11776c;
+      background: var(--page);
+      margin: 0;
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+    }
+    body[data-season="summer"] { --page: #e0f4ed; --panel: #fff6d9; --bar: #12665c; --paper: #ffd467; --ribbon: #ed6457; --trim: #197c73; }
+    body[data-season="fall"] { --page: #f4e2d4; --panel: #fff1dd; --bar: #793925; --paper: #ffc87f; --ribbon: #bc4d27; --trim: #744166; }
+    body[data-season="winter"] { --page: #e6eafa; --panel: #f4f5ff; --bar: #394984; --paper: #cde3ff; --ribbon: #7667b7; --trim: #37639d; }
+    .app {
+      width: min(100%, 420px);
+      background: var(--panel);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 12px 36px #35204924;
+    }
+    header {
+      background: var(--bar);
+      color: white;
+      padding: 12px 22px;
+      font-size: 1.35rem;
+      font-weight: 800;
+    }
+    main { padding: 12px 16px; display: grid; gap: 9px; }
+    #position { margin: 0; font-weight: 800; font-size: .875rem; }
+    .word-card {
+      margin: 0;
+      padding: 12px 10px 14px;
+      border-radius: 23px 23px 32px 32px;
+      border-bottom: 6px solid transparent;
+      background: linear-gradient(var(--paper), var(--paper)) padding-box,
+        repeating-linear-gradient(90deg, var(--ribbon) 0 26px, #faf0ff 26px 52px, var(--trim) 52px 78px) border-box;
+      font-family: Georgia, serif;
+      font-size: clamp(2.15rem, 9vw, 3rem);
+      line-height: 1.08;
+      text-align: center;
+      overflow-wrap: anywhere;
+    }
+    #word { margin: 0; font: inherit; font-weight: bold; }
+    #meaning { margin: 4px 0 0; font-size: .5em; line-height: 1.15; }
+    .voice-picker { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; }
+    select {
+      min-height: 40px;
+      border: 1px solid #11776c;
+      border-radius: 9px;
+      background: #fffaf4;
+      color: inherit;
+      font: inherit;
+      padding: 4px 8px;
+    }
+    button { font: inherit; font-weight: 800; cursor: pointer; }
+    button:focus-visible, select:focus-visible { outline: 3px solid #11776c; outline-offset: 3px; }
+    button:not(:disabled):not([aria-disabled="true"]):active {
+      filter: brightness(.86);
+      transform: translateY(2px);
+    }
+    .speech-buttons { display: flex; justify-content: center; gap: 16px; }
+    .speech-buttons button {
+      width: 88px;
+      height: 88px;
+      border: 2px solid #852248;
+      border-radius: 50%;
+      background: #fb81a1;
+      color: #352049;
+      box-shadow: 0 4px #852248;
+      line-height: 1.1;
+    }
+    #slow { background: #bdebd9; border-color: #11776c; box-shadow: 0 4px #11776c; }
+    #listen { background: #ffd467; border-color: #775010; box-shadow: 0 4px #775010; }
+    .speech-buttons [aria-hidden="true"] { display: block; font-size: 1.5rem; margin-bottom: 3px; }
+    #listen-label { font-size: .875rem; }
+    .speech-buttons button[aria-disabled="true"] { cursor: wait; }
+    .result {
+      background: #fffaf4;
+      border: 1px solid #dbbfdc;
+      border-radius: 14px;
+      padding: 10px 12px;
+    }
+    #lines {
+      margin: 0 0 6px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font: inherit;
+      font-size: .9375rem;
+      line-height: 1.35;
+    }
+    #lines mark {
+      background: #ffd2de;
+      color: #732044;
+      text-decoration: underline;
+    }
+    #copy {
+      min-height: 40px;
+      padding: 3px 11px;
+      border: 1px solid #11776c;
+      border-radius: 9px;
+      background: #e6f5ee;
+      color: #14594f;
+    }
+    #copy-status { font-size: .75rem; }
+    .deck-buttons { display: flex; gap: 8px; }
+    .deck-buttons button {
+      flex: 1;
+      min-height: 42px;
+      border: 1px solid var(--bar);
+      border-radius: 9px;
+      background: var(--bar);
+      color: white;
+    }
+    .deck-buttons button:disabled { background: #eee6ec; color: #635568; border-color: #aa9eb0; cursor: default; }
+    #deck-status { margin: 0; font-size: .8rem; }
+    @media (max-width: 460px) {
+      body { align-items: start; }
+      .app { min-height: 100dvh; border-radius: 0; box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>Say It</header>
+    <main>
+      <p id="position" aria-live="polite"></p>
+      <div class="word-card">
+        <h1 id="word"></h1>
+        <p id="meaning"></p>
+      </div>
+      <div class="voice-picker">
+        <label for="voices">Spanish voice</label>
+        <select id="voices" disabled><option>—</option></select>
+      </div>
+      <div class="speech-buttons">
+        <button id="say" type="button"><span aria-hidden="true">🔊</span>Listen</button>
+        <button id="slow" type="button"><span aria-hidden="true">🐢</span>Slow</button>
+        <button id="listen" type="button"><span aria-hidden="true">🎤</span><span id="listen-label">Speak</span></button>
+      </div>
+      <section class="result" aria-label="Result card">
+        <pre id="lines" aria-live="polite"></pre>
+        <button id="copy" type="button">Copy result</button>
+        <span id="copy-status" role="status"></span>
+      </section>
+      <div class="deck-buttons">
+        <button id="next" type="button">Next</button>
+        <button id="next-day" type="button" aria-describedby="deck-status">Next day</button>
+      </div>
+      <p id="deck-status"></p>
+    </main>
+  </div>
+  <script>
+    const LANG = "es-ES";
+    const WORDS = [
+      { word: "Buenos días", meaning: "Good morning" },
+      { word: "Buenas tardes", meaning: "Good evening" },
+      { word: "Buenas noches", meaning: "Good night" },
+      { word: "Hola", meaning: "Hello" },
+      { word: "Hasta luego", meaning: "Until later (See you later)" },
+      { word: "Hasta pronto", meaning: "See you soon" },
+      { word: "Mucho gusto", meaning: "Pleased to meet you" },
+      { word: "Señor", meaning: "Sir" },
+      { word: "Señora", meaning: "Madam" },
+      { word: "Señorita", meaning: "Miss" },
+      { word: "Igualmente", meaning: "Likewise" },
+      { word: "¿Cómo te llamas?", meaning: "How do you call yourself? (What's your name?)" },
+      { word: "Me llamo...", meaning: "I call myself..." },
+      { word: "Mi nombre es...", meaning: "My name is..." },
+      { word: "Yo soy...", meaning: "I am..." },
+      { word: "Sí", meaning: "Yes" },
+      { word: "No", meaning: "No" },
+      { word: "¡Adiós!", meaning: "Goodbye" },
+      { word: "¡Chao!", meaning: "Bye. (Informal)" },
+      { word: "Hasta la vista", meaning: "Until the view (Until i see you again; See you later)" },
+      { word: "Hasta mañana", meaning: "Until tomorrow (See you tomorrow)" },
+      { word: "Tengo un buen días", meaning: "Have a good day" },
+      { word: "Cuídate", meaning: "Take care" },
+      { word: "¡Nos vemos!", meaning: "See you!" },
+      { word: "Saludos a….", meaning: "Greetings to…" }
+    ];
+
+    const passRule = 'after a reload the result card shows Day 1, this word\'s latest % and a deck line like "PASS on 3 of 10"; PASS when 5 of today\'s 10 words are 70 % or more.';
+    const minimumMatch = 70;
+    const noSpeech = "I heard nothing — click 🎤 and say the word once, clearly";
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const speech = window.speechSynthesis;
+    const dailyLimit = 10;
+    const dailyPass = 5;
+    const storageKey = "say-it-scores";
+    const seasons = ["spring", "summer", "fall", "winter"];
+    const wordCard = document.querySelector("#word");
+    const sayButton = document.querySelector("#say");
+    const slowButton = document.querySelector("#slow");
+    const listenButton = document.querySelector("#listen");
+    const listenLabel = document.querySelector("#listen-label");
+    const speechButtons = [sayButton, slowButton, listenButton];
+    const voicePicker = document.querySelector("#voices");
+    const lines = document.querySelector("#lines");
+    const copyStatus = document.querySelector("#copy-status");
+    const meaning = document.querySelector("#meaning");
+    const position = document.querySelector("#position");
+    const nextButton = document.querySelector("#next");
+    const nextDayButton = document.querySelector("#next-day");
+    const deckStatus = document.querySelector("#deck-status");
+    const language = LANG.split("-")[0];
+    let heard = "";
+    let score;
+    let spanishVoices = [];
+    let problem = "";
+    let busy = false;
+    let activeSpeech;
+    let storageProblem = "";
+    const deck = loadDeck();
+    let word = "";
+
+    wordCard.lang = LANG;
+    const savedWord = deck.cards[deck.index];
+    orderDeck();
+    deck.index = deck.cards.indexOf(savedWord);
+    showWord();
+
+    function loadDeck() {
+      const first = WORDS.slice(0, dailyLimit).map((_, index) => index);
+      const startingDeck = { day: 1, index: 0, cards: first, nextNew: first.length, scores: {}, bestScores: {} };
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey));
+        if (saved?.cards?.length && saved.cards.every(id => WORDS[id]) && saved.cards[saved.index] !== undefined
+          && Number.isInteger(saved.day) && saved.day >= 1 && Number.isInteger(saved.nextNew)
+          && saved.nextNew >= first.length && saved.nextNew <= WORDS.length && saved.scores) {
+          saved.bestScores = { ...saved.scores, ...saved.bestScores };
+          return saved;
+        }
+      } catch {
+        storageProblem = "this browser couldn't open your saved scores";
+      }
+      return startingDeck;
+    }
+
+    function orderDeck() {
+      deck.cards.sort((a, b) => (deck.bestScores[a] ?? 101) - (deck.bestScores[b] ?? 101));
+    }
+
+    function saveDeck() {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(deck));
+        storageProblem = "";
+      } catch {
+        storageProblem = "this browser couldn't save your scores";
+      }
+    }
+
+    function showWord() {
+      const entry = WORDS[deck.cards[deck.index]];
+      word = entry.word;
+      wordCard.textContent = word;
+      meaning.textContent = entry.meaning;
+      position.textContent = "Day " + deck.day + " · word " + (deck.index + 1) + " of " + deck.cards.length;
+      document.body.dataset.season = seasons[(deck.day - 1) % seasons.length];
+      heard = "";
+      score = undefined;
+      problem = "";
+      copyStatus.textContent = "";
+    }
+
+    function letters(text) {
+      return [...text.normalize("NFC").toLocaleLowerCase(LANG)].filter(letter => /\p{L}/u.test(letter));
+    }
+
+    function scoreMatch(transcript) {
+      const expected = letters(word);
+      const actual = letters(transcript);
+      const distances = Array.from({ length: expected.length + 1 }, (_, row) => [row]);
+      distances[0] = Array.from({ length: actual.length + 1 }, (_, column) => column);
+
+      for (let row = 1; row <= expected.length; row++) {
+        for (let column = 1; column <= actual.length; column++) {
+          const cost = expected[row - 1] === actual[column - 1] ? 0 : 1;
+          distances[row][column] = Math.min(
+            distances[row - 1][column - 1] + cost,
+            distances[row - 1][column] + 1,
+            distances[row][column - 1] + 1
+          );
+        }
+      }
+
+      const changed = new Set();
+      let row = expected.length;
+      let column = actual.length;
+      const percentage = Math.round(100 * (1 - distances[row][column] / Math.max(row, column)));
+      while (row || column) {
+        const same = row && column && expected[row - 1] === actual[column - 1];
+        if (row && column && distances[row][column] === distances[row - 1][column - 1] + (same ? 0 : 1)) {
+          if (!same) changed.add(row - 1);
+          row--;
+          column--;
+        } else if (row && distances[row][column] === distances[row - 1][column] + 1) {
+          changed.add(--row);
+        } else {
+          changed.add(Math.max(0, row - 1));
+          column--;
+        }
+      }
+      return { percentage, changed };
+    }
+
+    function renderResult() {
+      lines.textContent = [
+        "RESULT CARD · Goal 4 · MY DECK",
+        "word: " + word,
+        "I heard: " + (heard || "—")
+      ].join("\n");
+
+      if (score?.changed.size) {
+        lines.append("\nDifferent parts: ");
+        const parts = word === "Buenos días" ? ["Bue", "nos", " ", "dí", "as"] : [...word];
+        let offset = 0;
+        for (const part of parts) {
+          const changed = letters(part).some((_, index) => score.changed.has(offset + index));
+          offset += letters(part).length;
+          if (changed) {
+            const mark = document.createElement("mark");
+            mark.textContent = part;
+            lines.append(mark);
+          } else {
+            lines.append(part);
+          }
+        }
+      }
+
+      const latest = deck.scores[deck.cards[deck.index]];
+      const passCount = deck.cards.filter(id => deck.scores[id] >= minimumMatch).length;
+      const dayPassed = passCount >= dailyPass;
+      const result = [
+        "match: " + (latest === undefined ? "—" : latest + "%"),
+        "day: Day " + deck.day,
+        "deck: PASS on " + passCount + " of " + deck.cards.length
+      ];
+      if (problem || storageProblem) result.push("problem: " + (problem || storageProblem));
+      result.push("PASS rule: " + passRule, dayPassed ? "→ PASS" : "→ NOT YET");
+      lines.append("\n" + result.join("\n"));
+      const packFinished = deck.nextNew === WORDS.length;
+      nextButton.disabled = busy || deck.cards.length < 2;
+      nextDayButton.disabled = busy || !dayPassed || packFinished;
+      const stillNeeded = dailyPass - passCount;
+      deckStatus.textContent = packFinished
+        ? "You’re on the last day of this pack."
+        : dayPassed ? "" : "To open Next day, reach 70% on " + stillNeeded + " more "
+          + (stillNeeded === 1 ? "word." : "words.");
+    }
+
+    function finish(message = "") {
+      problem = message;
+      busy = false;
+      activeSpeech = undefined;
+      for (const button of speechButtons) button.removeAttribute("aria-disabled");
+      voicePicker.disabled = spanishVoices.length === 0;
+      listenLabel.textContent = "Speak";
+      renderResult();
+    }
+
+    function begin() {
+      busy = true;
+      for (const button of speechButtons) button.setAttribute("aria-disabled", "true");
+      voicePicker.disabled = true;
+      copyStatus.textContent = "";
+      problem = "";
+    }
+
+    function updateVoicePicker(voices) {
+      const previous = spanishVoices[voicePicker.value]?.voiceURI;
+      spanishVoices = voices.filter(voice => voice.lang.toLowerCase().split(/[-_]/)[0] === language);
+      const options = spanishVoices.map((voice, index) => new Option(voice.name, index));
+      voicePicker.replaceChildren(...(options.length ? options : [new Option("No Spanish voices", "")]));
+      const selected = spanishVoices.findIndex(voice => voice.voiceURI === previous);
+      const preferred = spanishVoices.findIndex(voice => voice.lang.toLowerCase() === LANG.toLowerCase());
+      voicePicker.selectedIndex = selected >= 0 ? selected : Math.max(0, preferred);
+      voicePicker.disabled = busy || spanishVoices.length === 0;
+    }
+
+    function getVoicesWhenReady() {
+      const voices = speech.getVoices();
+      if (voices.length) return Promise.resolve(voices);
+      return new Promise(resolve => {
+        const timer = setTimeout(updateVoices, 2000);
+        speech.addEventListener("voiceschanged", updateVoices, { once: true });
+        function updateVoices() {
+          clearTimeout(timer);
+          speech.removeEventListener("voiceschanged", updateVoices);
+          resolve(speech.getVoices());
+        }
+      });
+    }
+
+    async function sayWord(rate) {
+      if (busy) return;
+      begin();
+      renderResult();
+
+      if (!speech || !window.SpeechSynthesisUtterance) {
+        finish("this browser can't say the word");
+        return;
+      }
+
+      try {
+        updateVoicePicker(await getVoicesWhenReady());
+        const voice = spanishVoices[voicePicker.value];
+        if (!voice) {
+          finish("no voice for Spanish on this computer");
+          return;
+        }
+
+        activeSpeech = new SpeechSynthesisUtterance(word);
+        activeSpeech.voice = voice;
+        activeSpeech.lang = voice.lang;
+        activeSpeech.rate = rate;
+        activeSpeech.onend = () => finish();
+        activeSpeech.onerror = () => finish("the voice couldn't say the word — click 🔊 to try again");
+        renderResult();
+        speech.speak(activeSpeech);
+      } catch {
+        finish("the voice couldn't say the word — click 🔊 to try again");
+      }
+    }
+
+    sayButton.addEventListener("click", () => sayWord(1));
+    slowButton.addEventListener("click", () => sayWord(0.5));
+    listenButton.addEventListener("click", () => {
+      if (busy) return;
+      begin();
+      heard = "";
+      score = undefined;
+      listenLabel.textContent = "Listening…";
+      renderResult();
+
+      if (!Recognition) {
+        finish("this browser can't listen — use Chrome");
+        return;
+      }
+
+      const blocked = location.protocol === "file:"
+        ? "mic blocked — refresh the page (round arrow), click 🎤, choose Allow while visiting the site"
+        : "mic blocked — click the icon left of the address, Site settings, Microphone, Allow, then reload";
+      const errors = {
+        "not-allowed": blocked,
+        "audio-capture": "no microphone — plug in headphones with a mic",
+        "no-speech": noSpeech
+      };
+      const tryAgain = "the browser couldn't listen — click 🎤 to try again";
+      let recognition;
+      let timer;
+      let done = false;
+
+      function stopListening(message, abort = false) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        if (abort) recognition.abort();
+        finish(message);
+      }
+
+      try {
+        recognition = new Recognition();
+        recognition.lang = LANG;
+        const deadline = performance.now() + 10000;
+        recognition.onresult = event => {
+          if (done) return;
+          if (performance.now() > deadline) {
+            stopListening(noSpeech, true);
+            return;
+          }
+          const answer = event.results[0][0];
+          const transcript = answer.transcript.trim();
+          heard = transcript;
+          if (letters(transcript).length) {
+            score = scoreMatch(transcript);
+            const id = deck.cards[deck.index];
+            deck.scores[id] = score.percentage;
+            deck.bestScores[id] = Math.max(deck.bestScores[id] ?? 0, score.percentage);
+            saveDeck();
+          }
+          stopListening(score ? "" : noSpeech);
+        };
+        recognition.onerror = event => stopListening(errors[event.error] || tryAgain);
+        recognition.onend = () => stopListening(noSpeech);
+        timer = setTimeout(() => stopListening(noSpeech, true), 10000);
+        recognition.start();
+      } catch (error) {
+        stopListening(error.name === "NotAllowedError" ? blocked : tryAgain);
+      }
+    });
+
+    nextButton.addEventListener("click", () => {
+      if (nextButton.disabled) return;
+      deck.index = (deck.index + 1) % deck.cards.length;
+      if (deck.index === 0) orderDeck();
+      saveDeck();
+      showWord();
+      renderResult();
+    });
+
+    nextDayButton.addEventListener("click", () => {
+      if (nextDayButton.disabled) return;
+      const review = deck.cards
+        .filter(id => deck.scores[id] < minimumMatch)
+        .sort((a, b) => deck.scores[a] - deck.scores[b])
+        .slice(0, 5);
+      const end = Math.min(WORDS.length, deck.nextNew + dailyLimit - review.length);
+      const fresh = WORDS.slice(deck.nextNew, end).map((_, index) => deck.nextNew + index);
+      deck.cards = [...review, ...fresh];
+      orderDeck();
+      deck.nextNew = end;
+      deck.day++;
+      deck.index = 0;
+      saveDeck();
+      showWord();
+      renderResult();
+    });
+
+    if (speech) {
+      const refreshVoices = () => {
+        if (busy) return;
+        updateVoicePicker(speech.getVoices());
+        renderResult();
+      };
+      speech.addEventListener("voiceschanged", refreshVoices);
+      refreshVoices();
+    }
+
+    document.querySelector("#copy").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(lines.textContent);
+        copyStatus.textContent = "Copied";
+      } catch {
+        const range = document.createRange();
+        range.selectNodeContents(lines);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+        copyStatus.textContent = document.execCommand("copy") ? "Copied" : "Select Copy to copy the result.";
+      }
+    });
+
+    renderResult();
+  </script>
+</body>
+</html>
